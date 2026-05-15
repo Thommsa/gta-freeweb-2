@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTA FreeWeb</title>
+    <style>
+        body { margin:0; background:#000; font-family:Arial; overflow:hidden; }
+        canvas { display:block; margin:0 auto; image-rendering:pixelated; }
+        #ui {
+            position: absolute; top: 10px; left: 10px; color: white; font-size: 18px;
+            text-shadow: 2px 2px 4px black; pointer-events: none;
+        }
+        #gameover {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: red; font-size: 60px; display: none; text-align: center;
+            text-shadow: 3px 3px 6px black;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        Score: <span id="score">0</span><br>
+        Wanted Level: <span id="wanted">0</span> ⭐
+    </div>
+    <div id="gameover">
+        BUSTED!<br>
+        <span style="font-size:30px">Final Score: <span id="finalscore">0</span></span><br><br>
+        Press R to Restart
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        let score = 0, wanted = 0, gameOver = false;
+
+        // Player car
+        let player = { x: 400, y: 500, angle: -Math.PI/2, speed: 0 };
+
+        // Simple map obstacles (buildings)
+        const buildings = [
+            {x:100,y:100,w:120,h:120}, {x:300,y:50,w:80,h:200},
+            {x:550,y:150,w:150,h:100}, {x:100,y:400,w:100,h:150}
+        ];
+
+        let keys = {};
+        window.onkeydown = e => keys[e.key.toLowerCase()] = true;
+        window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+
+        let npcs = [
+            {x:200,y:200,angle:0,speed:1.5},
+            {x:600,y:300,angle:Math.PI,speed:1.8}
+        ];
+
+        function drawCar(x, y, angle, color) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.fillStyle = color;
+            ctx.fillRect(-15, -10, 30, 20);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(-10, -8, 8, 5);
+            ctx.fillRect(5, -8, 8, 5);
+            ctx.restore();
+        }
+
+        function update() {
+            if (gameOver) return;
+
+            // Controls
+            if (keys['w'] || keys['arrowup']) player.speed = Math.min(player.speed + 0.4, 6);
+            if (keys['s'] || keys['arrowdown']) player.speed = Math.max(player.speed - 0.6, -3);
+            if (keys['a'] || keys['arrowleft']) player.angle -= 0.08 * (player.speed > 0 ? 1 : -0.5);
+            if (keys['d'] || keys['arrowright']) player.angle += 0.08 * (player.speed > 0 ? 1 : -0.5);
+            if (keys[' ']) player.speed *= 0.85; // drift
+
+            // Move
+            player.x += Math.cos(player.angle) * player.speed;
+            player.y += Math.sin(player.angle) * player.speed;
+            player.speed *= 0.96; // friction
+
+            // Boundaries
+            player.x = Math.max(30, Math.min(770, player.x));
+            player.y = Math.max(30, Math.min(570, player.y));
+
+            // NPC movement
+            npcs.forEach(npc => {
+                npc.x += Math.cos(npc.angle) * npc.speed;
+                npc.y += Math.sin(npc.angle) * npc.speed;
+                if (Math.random() < 0.02) npc.angle += (Math.random()-0.5)*0.8;
+            });
+
+            // Collision with NPCs
+            npcs.forEach((npc, i) => {
+                const dx = player.x - npc.x;
+                const dy = player.y - npc.y;
+                if (dx*dx + dy*dy < 800) {
+                    wanted = Math.min(5, wanted + 1);
+                    player.speed = -4;
+                    if (wanted >= 5) gameOver = true;
+                }
+            });
+
+            score += Math.floor(Math.abs(player.speed));
+            document.getElementById('score').textContent = score;
+            document.getElementById('wanted').textContent = wanted;
+        }
+
+        function draw() {
+            // Background (road)
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, 800, 600);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(50, 0, 700, 600);
+
+            // Road lines
+            ctx.strokeStyle = '#ff0';
+            ctx.lineWidth = 6;
+            for (let i = -2; i < 10; i++) {
+                ctx.beginPath();
+                ctx.moveTo(250, (i*80 + Date.now()/10 % 80) - 40);
+                ctx.lineTo(250, (i*80 + Date.now()/10 % 80) + 40);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(550, (i*80 + Date.now()/10 % 80) - 40);
+                ctx.lineTo(550, (i*80 + Date.now()/10 % 80) + 40);
+                ctx.stroke();
+            }
+
+            // Buildings
+            ctx.fillStyle = '#444';
+            buildings.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+
+            // NPCs
+            npcs.forEach(npc => drawCar(npc.x, npc.y, npc.angle, '#f33'));
+
+            // Player
+            drawCar(player.x, player.y, player.angle, '#0af');
+
+            if (gameOver) {
+                document.getElementById('gameover').style.display = 'block';
+                document.getElementById('finalscore').textContent = score;
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // Restart
+        document.addEventListener('keydown', e => {
+            if (gameOver && (e.key.toLowerCase() === 'r')) {
+                location.reload();
+            }
+        });
+
+        loop();
+    </script>
+</body>
+</html>
